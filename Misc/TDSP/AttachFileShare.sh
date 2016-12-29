@@ -18,10 +18,10 @@ function mountfileservices {
   azure account list --json > acctlist.json
   num_sub=$(jq '.| length' acctlist.json)
   sublist=$(cat acctlist.json | jq '.[] .name' --raw-output| cat -n)  
-  echo " Here are the subscription names under your account :"
-  echo
-  echo "$sublist"
-  echo
+  #echo " Here are the subscription names under your account :"
+  #echo
+  #echo "$sublist"
+  #echo
   echo -n "Do you have a file with the information of the file share you want to mount? Y/N "
   read inputfileyesorno
   if [ "${inputfileyesorno,,}" != 'n' ]
@@ -72,6 +72,8 @@ function mountfileservices {
 			#echo "from the file sa is $sa"
 			sharename=$(cat $filename | cut -d':' -f2  | head -4 | tail -1)
 			#echo "from the file sharename is $sharename"
+      			rg=$(cat $filename | cut -d':' -f2  | head -5 | tail -1)
+      			#echo "from the file rg is $rg"
 			if [ "$sub" = 'NA' ] || [ "$sa" = 'NA' ] || [ "$sharename" = 'NA' ]
 				 then
 				 echo -n "Information about the file share to be mounted is incomplete. You have to manually input information later. "
@@ -88,12 +90,19 @@ function mountfileservices {
  do
    if [ "$sub" = 'NA' ]
 		then
-		echo -n "Enter the subscription name where the Azure file share service has been created: "
-		read sub
+		sublist=$(cat acctlist.json | jq '.[] .name' --raw-output| cat -n)
+    		echo "Here are your subscriptions: "
+    		echo
+    		echo "$sublist"
+    		echo
+		echo -n "Enter the index of the subscription name where resources will be created: "
+    		read subnbr
+    		let subnbr2=subnbr-1
+    		sub=$(cat acctlist.json | jq  '.['$subnbr2'] .name' --raw-output)
    fi
    azure account list --json > acctlist.json
    sublist=$(cat acctlist.json | jq '.[] .name' --raw-output)
-   if [[ $sublist =~ $sub ]]
+   if [[ $sublist=~$sub ]]
 		then
 		#echo "$sub is in $sublist"
 		subnameright=true
@@ -143,16 +152,20 @@ function mountfileservices {
    num_stor=$(jq '.| length' storlist.json)
    storageaccountnames=$(cat storlist.json | jq '.[] .name' --raw-output | cat -n)
    resourcegroupnames=$(cat storlist.json | jq '.[] .resourceGroup' --raw-output | cat -n)
-   echo -n "Here are the storage account names under subscription $sub "
-   echo
-   echo -n "$storageaccountnames"
-   echo
+   #echo -n "Here are the storage account names under subscription $sub "
+   #echo
+   #echo -n "$storageaccountnames"
+   #echo
    goodsaname=false
    quitornot=false
    while [  $goodsaname = false ] && [  $quitornot = false ]
    do
 		if [ "$sa" = 'NA' ]
 			 then
+			 echo -n "Here are the storage account names under subscription $sub "
+   			 echo
+			 echo -n "$storageaccountnames"
+			 echo 
 			 echo -n "Enter the index of the storage account name where your Azure file share you want to mount is created: "
 			 read saindex
 			 if [ "$saindex" -gt 0 ] && [ "$saindex" -le $num_stor ]
@@ -171,7 +184,7 @@ function mountfileservices {
 			 fi
 		else
 			 storageaccountnames2=$(cat storlist.json | jq '.[] .name' --raw-output)
-			 if [[ ! $storageaccountnames2 =~ $sa ]]
+			 if [[ ! $storageaccountnames2=~$sa ]]
 				  then
 				  echo -n " Storage account name $sa from the file does not exist. Please manually input it next. "
 				  sa='NA'
@@ -226,10 +239,10 @@ function mountfileservices {
 		   echo -n "Enter the name of the drive to be added to your virtual machine. This name should be diferent from the disk names your virtual machine has: "
 		   read drivename
 		   drivelist=$(df -h | rev | cut -d" " -f1 | rev)
-		   if [[ $drivelist =~ $drivename ]]
+		   if [[ ${drivelist} = *"$drivename"* ]]
 		   #if echo "$sublist" | grep -q "$sub" ; then echo "matched" ;else echo "not matched"; fi;
 				then
-				echo -n "The disk drive $drivename you want to mount the file sahre already exists. [R]-retry/Q-quit"
+				echo -n "The disk drive $drivename you want to mount the file share already exists. [R]-retry/Q-quit"
 				read inputnewdrive
 				if [ "${inputnewdrive,,}" = 'q' ]
 					 then
@@ -243,8 +256,13 @@ function mountfileservices {
       if [ $drivenameright = true ]
        then
 		   echo -n "File share $sharename will be mounted to your virtual machine as drive $drivename "
-		   echo 
-		   k=`azure storage account keys list  $sa -g $rg --json |  python -c 'import json,sys;obj=json.load(sys.stdin)[0]["value"];print(obj)'`
+		   echo
+       #echo "999 $rg" 
+		   k=`azure storage account keys list  $sa --resource-group $rg --json |  python -c 'import json,sys;obj=json.load(sys.stdin)[0]["value"];print(obj)'`
+       #echo "999 $k"
+       #echo "999 $drivename"
+       #echo "999 $sa"
+       #echo "999 $sharename"
 		   sudo mkdir -p /$drivename
 		   sudo mount -t cifs //$sa.file.core.windows.net/$sharename /$drivename -o vers=3.0,username=$sa,password=$k,dir_mode=0777,file_mode=0777
 		   sharenameexist=true

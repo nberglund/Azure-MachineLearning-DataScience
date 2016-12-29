@@ -1,26 +1,41 @@
+################################################################################
+#    Copyright (c) Microsoft. All rights reserved.
+#    
+#    Apache 2.0 License
+#    
+#    You may obtain a copy of the License at
+#    http://www.apache.org/licenses/LICENSE-2.0
+#    
+#    Unless required by applicable law or agreed to in writing, software 
+#    distributed under the License is distributed on an "AS IS" BASIS, 
+#    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or 
+#    implied. See the License for the specific language governing 
+#    permissions and limitations under the License.
+#
+################################################################################
+
+
 #######################################################################
 # FIRST LOGIN AND SAVE PROFILE IN A FILE WHICH WILL BE USED FOR SUBMITTING JOBS IN PARALLEL
 #######################################################################
-Login-AzureRmAccount
+$AzProfile = Login-AzureRmAccount
 
 #######################################################################
 # SET WORKING FOLDER PATH
 #######################################################################
-Set-Location -Path C:\Users\deguhath\Desktop\CDSP\Spark\KDDBlog\ProvisionScripts
-$basepath= Get-Location
-$currentPath = [string]$basepath + "\Configuration"
+$basepath = "C:\RSpark\RSpark_KDD2016"
+
 #######################################################################
-# READ IN PARAMETERS
+# READ IN CLUSTER CONFIGURATION PARAMETERS
 #######################################################################
-#READ IN PARAMETER CSV FILE
-$paramFile = Import-Csv ClusterParameters.csv
+#READ IN PARAMETER CSV CONFIGURATION FILE
+$paramFile = Import-Csv $basepath\Configuration\ClusterParameters.csv
 
 #GET ALL THE PARAMETERS FROM THE PARAMETER FILE
-$subscriptionname = $paramFile | Where-Object {$_.Parameter -eq "SubscriptionName"} | % {$_.Value}
 $subscriptionid = $paramFile | Where-Object {$_.Parameter -eq "SubscriptionID"} | % {$_.Value}
-$tenantid = $paramFile | Where-Object {$_.Parameter -eq "TenantID"} | % {$_.Value}
+$tenantid = $AzProfile.Context.Tenant.TenantId;
 $resourcegroup = $paramFile | Where-Object {$_.Parameter -eq "ResourceGroup"} | % {$_.Value}
-$location = $paramFile | Where-Object {$_.Parameter -eq "Location"} | % {$_.Value}
+$profilepathtmp = $paramFile | Where-Object {$_.Parameter -eq "Profilepath"} | % {$_.Value}; $profilepath = $currentPath + "\Configuration\" + [string]$tmp
 $tmp = $paramFile | Where-Object {$_.Parameter -eq "ClusterStartIndex"} | % {$_.Value}; $clusterstartindex = [int]$tmp;
 $tmp = $paramFile | Where-Object {$_.Parameter -eq "ClusterEndIndex"} | % {$_.Value}; $clusterendindex = [int]$tmp;
 $clusterprefix = $paramFile | Where-Object {$_.Parameter -eq "ClusterPrefix"} | % {$_.Value}
@@ -42,12 +57,19 @@ for ($i=$clusterstartIndex; $i -le $clusterendIndex; $i++){
 	
     # Get destination storage account key
     $destKey = (Get-AzureRmStorageAccountKey -ResourceGroupName $resourcegroup -Name $destinationStorageName).Value[0]
-    	
-	# Copy airline data, csv data in parts
-    $destStorage = "https://$destinationStorageName.blob.core.windows.net/$destinationContainerName/HdiSamples/HdiSamples/FlightDelay"
-    $sourceStorage = "https://$sourcedatastoragename.blob.core.windows.net/$sourcedatacontainername/Airline"
-	&'C:\Program Files (x86)\Microsoft SDKs\Azure\AzCopy\AzCopy.exe' /Source:$sourceStorage /Dest:$destStorage /DestKey:$destKey /S /V /Y
 
+    ## DATASETS FOR FLIGHT DELAY 
+	# Copy airline data, csv data in parts
+    $destStorage = "https://$destinationStorageName.blob.core.windows.net/$destinationContainerName/HdiSamples/HdiSamples/FlightDelay/AirlineSubsetCsv"
+    $sourceStorage = "https://$sourcedatastoragename.blob.core.windows.net/$sourcedatacontainername/Airline/AirlineSubsetCsv"
+	&'C:\Program Files (x86)\Microsoft SDKs\Azure\AzCopy\AzCopy.exe' /sourceType:blob /destType:blob /Source:$sourceStorage /Dest:$destStorage /DestKey:$destKey /Pattern:"part-0" /S /V /Y
+
+	# Copy weather data, csv data in parts
+    $destStorage = "https://$destinationStorageName.blob.core.windows.net/$destinationContainerName/HdiSamples/HdiSamples/FlightDelay/WeatherSubsetCsv"
+    $sourceStorage = "https://$sourcedatastoragename.blob.core.windows.net/$sourcedatacontainername/Airline/WeatherSubsetCsv"
+	&'C:\Program Files (x86)\Microsoft SDKs\Azure\AzCopy\AzCopy.exe' /sourceType:blob /destType:blob /Source:$sourceStorage /Dest:$destStorage /DestKey:$destKey /Pattern:"part-0" /S /V /Y
+
+    ## DATASETS FOR NYC TAXI TRIP / FARE
     # Copy NYC taxi original csv data for month 12
     $destStorage = "https://$destinationStorageName.blob.core.windows.net/$destinationContainerName/HdiSamples/HdiSamples/NYCTaxi/Csv"
     $sourceStorage = "https://$sourcedatastoragename.blob.core.windows.net/$sourcedatacontainername/NYCTaxi/KDD2016"
@@ -59,3 +81,6 @@ for ($i=$clusterstartIndex; $i -le $clusterendIndex; $i++){
     $sourceStorage = "https://$sourcedatastoragename.blob.core.windows.net/$sourcedatacontainername/NYCTaxi/KDD2016/JoinedParquetSampledFile"
     &'C:\Program Files (x86)\Microsoft SDKs\Azure\AzCopy\AzCopy.exe' /Source:$sourceStorage /Dest:$destStorage /DestKey:$destKey /Pattern:"part-r" /S /V /Y
 }
+#######################################################################
+# END
+#######################################################################
